@@ -24,7 +24,7 @@ class GdePdfReader:
 
     def __init__(self, stream64):
         self._document = pymupdf.open(filename='pdf', stream=b64decode(stream64))
-        self._is_signed = True if self._document.get_sigflags() != 0 else False
+        self._is_signed = True if self._document.get_sigflags() != -1 else False
         self._gde_number = self._get_text_value(self._GDE_NUMBER_TITLE)
         self._reference = self._get_gde_reference()
         self._signer = self._get_signer_name()
@@ -32,7 +32,7 @@ class GdePdfReader:
 
     def _get_signer_name(self) -> Union[dict, None]:
         result = None
-        if not self.is_signed:
+        if not self._is_signed:
             return None
         last_text_page = self._document[-1].get_textpage()
         for block in last_text_page.extractBLOCKS():
