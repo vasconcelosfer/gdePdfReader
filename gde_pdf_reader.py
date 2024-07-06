@@ -26,9 +26,10 @@ class GdePdfReader:
         self._document = pymupdf.open(filename='pdf', stream=b64decode(stream64))
         self._is_signed = True if self._document.get_sigflags() != -1 else False
         self._gde_number = self._get_text_value(self._GDE_NUMBER_TITLE)
-        self._reference = self._get_gde_reference()
-        self._signer = self._get_signer_name()
         self._gde_parsed_number = GdeNumberParser(self._gde_number) if self._gde_number else None
+        self._reference = self._get_gde_reference()
+        self._reference_parsed = GdeReferenceParser(self._reference) if self._reference else None
+        self._signer = self._get_signer_name()
 
     def _get_signer_name(self) -> Union[dict, None]:
         result = None
@@ -120,6 +121,14 @@ class GdePdfReader:
         return self._is_signed
 
     @property
+    def reference(self):
+        return self._reference
+
+    @property
+    def expedient(self):
+        return self._reference_parsed.expedient
+
+    @property
     def filename(self):
         if not self._gde_number:
             return None
@@ -197,15 +206,31 @@ class GdeNumberParser:
 
 class GdeReferenceParser:
 
-    _sigea_pattern = r"\b\d{5}-\d{1,2}-\d{4}\b"
+    _sigea_pattern = r"\b\d{5}-\d{1,5}-\d{4}\b"
     _sita_pattern = r"\b\d{5}SITA\d{6}[A-Z]?\b"
-
-    _archive_pattern = f"({_sita_pattern}|{_sita_pattern})"
+    _multinote_pattern = r"\bmultinota\s*N[°o]\s*(0?(\d{1,4}[-/]\d{2,4}))\b"
+    _archive_pattern = f"({_sigea_pattern}|{_sita_pattern}|{_multinote_pattern})"
 
     def __init__(self, reference):
+        expedient = re.search(self._archive_pattern, reference, re.IGNORECASE)
+
+        if expedient:
+            # Determine which pattern matched and extract the appropriate group
+            sigea_match = re.search(self._sigea_pattern, reference, re.IGNORECASE)
+            sita_match = re.search(self._sita_pattern, reference, re.IGNORECASE)
+            multinote_match = re.search(self._multinote_pattern, reference, re.IGNORECASE)
+
+            if sigea_match:
+                self._expedient_number = sigea_match.group(0)
+            elif sita_match:
+                self._expedient_number = sita_match.group(0)
+            elif multinote_match:
+                self._expedient_number = multinote_match.group(2).replace('/', '-')
+        else:
+            self._expedient_number = None
         # Check for archive number
-        expedient = re.findall(self._archive_pattern, reference)
-        self._expedient_number = expedient if expedient else None
+        # expedient = re.search(self._archive_pattern, reference, re.IGNORECASE)
+        # self._expedient_number = expedient.group(0) if expedient else None
 
     @property
     def expedient(self):
